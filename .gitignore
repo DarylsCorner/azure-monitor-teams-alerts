@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+*.parameters.json
+*.parameters.local.*
+*.log
+.azure/
+.tmp/
+__pycache__/

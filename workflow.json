@@ -1,0 +1,155 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "teamsWorkflowUrl": { "type": "SecureString" },
+    "severities": { "type": "Array" },
+    "sendResolved": { "type": "Bool" }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Http",
+      "operationOptions": "EnableSchemaValidation",
+      "runtimeConfiguration": {
+        "secureData": { "properties": ["outputs"] }
+      },
+      "inputs": {
+        "method": "POST",
+        "schema": {
+          "type": "object",
+          "required": ["schemaId", "data"],
+          "properties": {
+            "schemaId": { "type": "string", "enum": ["azureMonitorCommonAlertSchema"] },
+            "data": {
+              "type": "object",
+              "required": ["essentials"],
+              "properties": {
+                "essentials": {
+                  "type": "object",
+                  "required": ["alertRule", "severity", "monitorCondition", "alertTargetIDs", "firedDateTime"],
+                  "properties": {
+                    "alertRule": { "type": "string" },
+                    "severity": { "type": "string", "enum": ["Sev0", "Sev1", "Sev2", "Sev3", "Sev4"] },
+                    "monitorCondition": { "type": "string", "enum": ["Fired", "Resolved"] },
+                    "alertTargetIDs": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    },
+                    "firedDateTime": { "type": "string" },
+                    "resolvedDateTime": { "type": ["string", "null"] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Filter_alert": {
+      "type": "If",
+      "expression": "@and(contains(parameters('severities'), triggerBody()?['data']?['essentials']?['severity']), or(equals(triggerBody()?['data']?['essentials']?['monitorCondition'], 'Fired'), parameters('sendResolved')))",
+      "actions": {
+        "Post_to_Teams_workflow": {
+          "type": "Http",
+          "runtimeConfiguration": {
+            "secureData": { "properties": ["inputs", "outputs"] }
+          },
+          "inputs": {
+            "method": "POST",
+            "uri": "@parameters('teamsWorkflowUrl')",
+            "headers": { "Content-Type": "application/json" },
+            "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" },
+            "body": {
+              "type": "message",
+              "attachments": [
+                {
+                  "contentType": "application/vnd.microsoft.card.adaptive",
+                  "contentUrl": null,
+                  "content": {
+                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                    "type": "AdaptiveCard",
+                    "version": "1.2",
+                    "body": [
+                      {
+                        "type": "TextBlock",
+                        "text": "@concat(triggerBody()?['data']?['essentials']?['monitorCondition'], ': ', triggerBody()?['data']?['essentials']?['alertRule'])",
+                        "weight": "Bolder",
+                        "color": "@if(equals(triggerBody()?['data']?['essentials']?['monitorCondition'], 'Resolved'), 'Good', 'Attention')",
+                        "wrap": true
+                      },
+                      {
+                        "type": "FactSet",
+                        "facts": [
+                          { "title": "Severity", "value": "@triggerBody()?['data']?['essentials']?['severity']" },
+                          { "title": "Resources", "value": "@join(triggerBody()?['data']?['essentials']?['alertTargetIDs'], ', ')" },
+                          { "title": "Fired (UTC)", "value": "@triggerBody()?['data']?['essentials']?['firedDateTime']" },
+                          { "title": "Resolved (UTC)", "value": "@coalesce(triggerBody()?['data']?['essentials']?['resolvedDateTime'], 'Not provided')" }
+                        ]
+                      }
+                    ],
+                    "actions": [
+                      {
+                        "type": "Action.OpenUrl",
+                        "title": "Open first resource",
+                        "url": "@concat('https://portal.azure.com/#resource', first(triggerBody()?['data']?['essentials']?['alertTargetIDs']))"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "runAfter": {}
+        },
+        "Delivery_accepted": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 200,
+            "body": { "status": "accepted-by-teams-workflow" }
+          },
+          "runAfter": { "Post_to_Teams_workflow": ["Succeeded"] }
+        },
+        "Delivery_failed": {
+          "type": "Response",
+          "kind": "Http",
+          "inputs": {
+            "statusCode": 502,
+            "body": { "status": "teams-workflow-request-failed" }
+          },
+          "runAfter": { "Post_to_Teams_workflow": ["Failed", "TimedOut"] }
+        },
+        "Mark_run_failed": {
+          "type": "Terminate",
+          "inputs": {
+            "runStatus": "Failed",
+            "runError": {
+              "code": "TeamsWorkflowRequestFailed",
+              "message": "The Teams workflow request failed; inspect the secured HTTP action."
+            }
+          },
+          "runAfter": { "Delivery_failed": ["Succeeded", "Failed", "TimedOut"] }
+        }
+      },
+      "else": {
+        "actions": {
+          "Filtered": {
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+              "statusCode": 200,
+              "body": { "status": "filtered" }
+            },
+            "runAfter": {}
+          }
+        }
+      },
+      "runAfter": {}
+    }
+  },
+  "outputs": {}
+}
