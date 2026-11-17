@@ -178,17 +178,22 @@ The following checks passed in a dedicated test deployment on November 17, 2026:
 | Valid Sev4 request with the default severity filter | HTTP 200 with `filtered`; no card |
 | Synthetic Fired alert | Logic App succeeded and the card appeared in Teams |
 | Real Sev2 Azure Monitor metric alert routed through the action group | Logic App succeeded and the matching alert card appeared in Teams |
+| Synthetic Sev2 Resolved alert | Green Resolved card appeared with a populated resolved timestamp |
+| Automatic resolution of the real Sev2 metric alert | Matching green Resolved card appeared with the original fired time and a populated resolved timestamp |
 
 These are point-in-time results, not guarantees for other tenants or policies.
-Resolved notifications, outbound retry exhaustion, and duplicate-delivery
-behavior have not been comprehensively validated live.
+Suppression with `--no-resolved`, outbound retry exhaustion, and duplicate-delivery
+behavior remain unverified live.
 
 To repeat the full-path test, attach the deployed action group to a dedicated
 Sev2 alert rule, trigger it safely, and verify the matching alert name in Teams.
 The synthetic `--test-only` command bypasses Azure Monitor and the action group.
 Disable temporary alert rules after testing to stop ongoing evaluation and
 potential charges; delete test resources only after confirming they are no longer
-needed. Avoid rules that repeatedly fire on their own alert-processing activity.
+needed. Avoid rules that repeatedly fire on their own alert-processing activity:
+the temporary `RunsStarted > 0` test rule fired again when the Logic App processed
+its resolution notification. The rule was disabled after verification. Do not
+use that self-monitoring condition as a production failure alert.
 
 ## Public repository safety
 
