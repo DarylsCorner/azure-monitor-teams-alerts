@@ -27,11 +27,18 @@ retryable failures). This is at-least-once delivery: duplicate cards are possibl
 
 ### Set up the Teams destination
 
-In the target channel's **Workflows** app, use the template that posts to a channel
-when a webhook request is received. Configure authentication as **Anyone**, select
-the channel, sign in to the Teams connection, and save the workflow. Use a template
-that accepts the standard `type: message` / `attachments` Adaptive Card envelope.
-Copy its signed URL privately.
+1. Choose a test Team and a Standard channel that represents the intended customer
+   destination.
+2. Open the channel's **Workflows** app, then **Create workflows** to open the full
+   template catalog. Searching only suggested workflows can return no results.
+3. Search for **webhook** and select **Send webhook alerts to a channel**. Template
+   names can vary by tenant and Teams version.
+4. Sign in to the Teams connection, select the team/channel, and configure
+   authentication as **Anyone** if prompted. The workflow must accept the standard
+   `type: message` / `attachments` Adaptive Card envelope.
+5. Save the workflow and copy its signed webhook URL privately. Supply it using the
+   hidden Bash prompt or secret environment variable shown below; do not paste it
+   into chat, screenshots, issues, or source control.
 
 This is the simplest current webhook integration, but it is **not zero-setup**.
 The workflow and Teams connection have user ownership. Assign an appropriate
@@ -39,6 +46,11 @@ co-owner and follow your tenant's account/lifecycle policies. An "Anyone" URL is
 bearer credential: anyone possessing it can invoke that workflow. If your tenant
 does not permit this, stop; this script does not support tenant-authenticated
 webhooks. A separately designed authenticated integration is needed.
+
+Check the workflow's status in [Power Automate](https://make.powerautomate.com/)
+under **My flows**, in the environment where it was created. Organizational
+policies can suspend the webhook trigger even when Teams displays **Active**.
+See [Workflow suspended or disabled](#workflow-suspended-or-disabled) below.
 
 Office 365 connector-based Incoming Webhooks were retired in May 2026. They are
 not the same thing as the Logic Apps managed Teams connector, which this project
@@ -129,10 +141,59 @@ Monitor these resources separately so failures of the alert pipeline are visible
 Consumption executions and actions incur Azure charges; Teams/Power Automate
 licensing and tenant policies also apply.
 
+### Workflow suspended or disabled
+
+If the outbound HTTP action fails with `WorkflowTriggerIsNotEnabled`, open the
+destination workflow in Power Automate and inspect its status and warnings.
+A Teams **Active** label or enabled toggle alone does not establish that the
+trigger can run.
+
+- If the flow is simply turned off and policy permits it, turn it on and send one
+  controlled test.
+- If an admin data policy restricts `TeamsWebhookRequestReceived`, contact your
+  Power Platform administrator or internal support team. Ask which approved
+  environment permits this trigger and **Anyone** authentication. An Azure
+  subscription owner or Teams channel owner is not necessarily the policy owner.
+- Do not bypass the restriction or weaken a tenant-wide policy for testing.
+  Recreating the workflow in the same restricted environment does not resolve it.
+  Even a successful test after enabling the flow does not establish policy
+  approval or permanent remediation.
+- If anonymous webhooks are prohibited, use a separately designed, approved
+  authenticated integration.
+
+An approved development tenant can host the Teams workflow while the Logic App
+stays in the original Azure subscription: this integration calls a signed HTTPS
+URL and does not require a shared tenant identity. Obtain authorization before
+sending data across tenants. Even synthetic cards include Azure resource IDs.
+After replacing the destination URL, rerun deployment to update the workflow
+parameter; `--test-only` does not update it.
+
+### Live validation results
+
+The following checks passed in a dedicated test deployment on November 17, 2026:
+
+| Check | Observed result |
+| --- | --- |
+| Invalid schema ID, invalid monitor condition, empty target array, or missing required field | HTTP 400 |
+| Valid Sev4 request with the default severity filter | HTTP 200 with `filtered`; no card |
+| Synthetic Fired alert | Logic App succeeded and the card appeared in Teams |
+| Real Sev2 Azure Monitor metric alert routed through the action group | Logic App succeeded and the matching alert card appeared in Teams |
+
+These are point-in-time results, not guarantees for other tenants or policies.
+Resolved notifications, outbound retry exhaustion, and duplicate-delivery
+behavior have not been comprehensively validated live.
+
+To repeat the full-path test, attach the deployed action group to a dedicated
+Sev2 alert rule, trigger it safely, and verify the matching alert name in Teams.
+The synthetic `--test-only` command bypasses Azure Monitor and the action group.
+Disable temporary alert rules after testing to stop ongoing evaluation and
+potential charges; delete test resources only after confirming they are no longer
+needed. Avoid rules that repeatedly fire on their own alert-processing activity.
+
 ## Public repository safety
 
-Publication is intentionally deferred. This folder must be its own Git repository,
-not part of your home-directory repository. Before publishing, verify:
+Keep this folder in its own Git repository, not part of a home-directory
+repository. Before committing or publishing changes, verify:
 
 ```bash
 git rev-parse --show-toplevel
@@ -164,3 +225,4 @@ git diff --cached
 - [Alert processing rules and limitations](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-processing-rules)
 - [Logic Apps REST API](https://learn.microsoft.com/en-us/rest/api/logic/workflows/create-or-update)
 - [Logic Apps security](https://learn.microsoft.com/en-us/azure/logic-apps/set-up-security-permissions)
+- [Troubleshoot Power Automate triggers and policy suspensions](https://learn.microsoft.com/en-us/troubleshoot/power-platform/power-automate/flow-run-issues/triggers-troubleshoot)
