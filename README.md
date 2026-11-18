@@ -79,7 +79,8 @@ inject it as a secret environment variable; do not put it on the command line.
 
 Without an alert processing rule, attach the newly created `alerts-teams-ag`
 action group to the Azure Monitor alert rules you want to forward. The receiver
-uses the common alert schema. This project does not create alert rules.
+uses the common alert schema. The main deployment script does not create alert
+rules; the optional script below does.
 
 ```bash
 # Offline input/JSON checks only; needs a real URL locally, but does not call Azure.
@@ -110,11 +111,96 @@ Disable or remove it explicitly in Azure if no longer wanted. Resources are
 provisioned sequentially: a failed run may leave partial resources; fix the
 reported error and rerun. The script never deletes cloud resources.
 
+## Optional subscription-wide VM CPU rules
+
+After deploying the notification pipeline, use `deploy-alert-rules.sh` separately
+to create metric alert rules. It requires the same Bash, Python 3, and Azure CLI
+prerequisites, an existing resource group/action group, read access to all target
+VMs/metrics, and permission to read/write `Microsoft.Insights/metricAlerts`.
+No Teams webhook URL is needed.
+
+```bash
+# Preview only: Azure reads, no resource changes.
+bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+  --regions eastus2,southcentralus
+
+# Apply disabled rules for customer review.
+bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+  --regions eastus2,southcentralus --apply
+
+# Explicitly enable (or update and enable) after policy/destination approval.
+bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+  --regions eastus2,southcentralus --apply --enable
+```
+
+`EUS2` and `SCUS` aliases are accepted. Regions are always explicit; the script
+does not discover additional regions or deploy to the whole subscription blindly.
+It creates one subscription-scoped, multi-resource rule per selected region:
+`alerts-teams-vm-cpu-eastus2` and `alerts-teams-vm-cpu-southcentralus` in this example.
+Each rule evaluates **each VM separately**, not the fleet average:
+
+- Platform metric `Percentage CPU`, average **strictly greater than 90%** over
+  five minutes, evaluated every minute, severity **Sev2**, automatic resolution.
+- All `Microsoft.Compute/virtualMachines` in that subscription/region, across
+  resource groups. Future VMs in those regions are included automatically.
+  New regions require another explicit deployment. VM scale sets are not included.
+- No guest agent or Log Analytics workspace is needed for this platform metric.
+- The default destination is `<prefix>-ag` in the supplied resource group.
+  Use `-p/--prefix` to match another deployment, or `--action-group-id` to specify
+  an existing action group in the same subscription.
+
+The script validates the enabled action group/common-schema Logic App receiver,
+checks a representative VM's CPU metric in each region, and checks all rule-name
+collisions before any writes. At least one visible VM per region is required.
+It does not prove subscription-wide visibility; use an identity with read access
+across the subscription. Preview prints the exact proposed resource bodies.
+Only rules with this script's ownership tags are updated; unrelated rules are
+never adopted. Existing equivalent rules under other names are not deduplicated.
+
+**Every apply without `--enable` writes disabled rules, including updates.**
+Removing a region from the command does not delete or disable its existing rule.
+Applies are sequential, not transactional; failure can leave partial changes.
+Each written rule is read back and checked. No rules are deleted automatically.
+Enabled metric alerts are billed based on monitored time series, not just rule
+count; notification workflow executions also incur charges. A disabled or
+policy-blocked Teams workflow will not deliver notifications even if the rules work.
+This script has offline mocked validation only; validate it in an approved test
+subscription before production use.
+
+### Multiple subscriptions
+
+Run the script once per subscription, listing the regions to cover in that
+subscription. Two subscriptions across two regions require four rules in total:
+
+```bash
+# Preview two regional rules in subscription 1.
+bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-1-uuid>' \
+  --regions eastus2,southcentralus
+
+# Preview two regional rules in subscription 2.
+bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-2-uuid>' \
+  --regions eastus2,southcentralus
+```
+
+Each subscription needs the specified existing resource group and an enabled
+action group with a common-schema Logic App receiver in that subscription.
+By default, the script references `alerts-teams-ag` in the supplied resource
+group; use `--action-group-id` or `--prefix` for a different destination.
+The deployment identity needs the required permissions in each subscription,
+and each selected region needs at least one visible VM for validation.
+Both notification pipelines can post to the same approved Teams channel.
+
+These commands only preview. Add `--apply` to each command to create disabled
+rules, then use `--apply --enable` after reviewing the rules and confirming
+destination/policy approval. Neither subscription is changed automatically
+when the other is deployed.
+
 ## Verification and troubleshooting
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py'
 bash tests/test_cli.sh
+bash -n deploy-alert-rules.sh
 ```
 
 These are offline tests using mocked Azure CLI and curl. They do not verify
@@ -227,6 +313,7 @@ git diff --cached
 
 - [Teams webhook guidance and Office 365 connector retirement](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook)
 - [Azure Monitor common alert schema](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-common-schema)
+- [Metric alerts across multiple resources](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-create-rule-cli-powershell-arm)
 - [Alert processing rules and limitations](https://learn.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-processing-rules)
 - [Logic Apps REST API](https://learn.microsoft.com/en-us/rest/api/logic/workflows/create-or-update)
 - [Logic Apps security](https://learn.microsoft.com/en-us/azure/logic-apps/set-up-security-permissions)
