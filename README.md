@@ -1,6 +1,6 @@
 # Azure Monitor alerts to Teams
 
-Bash CLI that provisions a Consumption Logic App and an Azure Monitor action group
+Deployment scripts that provision a Consumption Logic App and an Azure Monitor action group
 using **Azure CLI directly** (`az group create`, `az rest`).
 
 ```
@@ -37,7 +37,7 @@ retryable failures). This is at-least-once delivery: duplicate cards are possibl
    authentication as **Anyone** if prompted. The workflow must accept the standard
    `type: message` / `attachments` Adaptive Card envelope.
 5. Save the workflow and copy its signed webhook URL privately. Supply it using the
-   hidden Bash prompt or secret environment variable shown below; do not paste it
+   hidden prompt or secret environment variable shown below; do not paste it
    into chat, screenshots, issues, or source control.
 
 This is the simplest current webhook integration, but it is **not zero-setup**.
@@ -58,17 +58,20 @@ does not use.
 
 ## Deploy
 
-Run these commands **in Bash**, including on Windows:
+The examples below use a Linux terminal. Scripts include a Bash shebang and are
+tracked as executable, so no interpreter prefix is needed. If a downloaded
+archive loses executable permissions, restore them with
+`chmod +x deploy.sh deploy-alert-rules.sh tests/test_cli.sh`.
 
-```bash
-cd /c/path/to/logic-app-alerts  # Git Bash; adjust for your machine
+```shell
+cd /path/to/azure-monitor-teams-alerts  # Adjust for your machine.
 az login
 
 # Hidden input avoids storing the URL in shell history.
 read -r -s -p 'Teams Workflows URL: ' TEAMS_WORKFLOW_URL; echo
 export TEAMS_WORKFLOW_URL
 
-bash deploy.sh -g rg-monitoring -l westus2 \
+./deploy.sh -g rg-monitoring -l westus2 \
   -s '<subscription-uuid>' --test
 
 unset TEAMS_WORKFLOW_URL
@@ -82,19 +85,19 @@ action group to the Azure Monitor alert rules you want to forward. The receiver
 uses the common alert schema. The main deployment script does not create alert
 rules; the optional script below does.
 
-```bash
+```shell
 # Offline input/JSON checks only; needs a real URL locally, but does not call Azure.
-bash deploy.sh -g rg-monitoring -l westus2 -s '<subscription-uuid>' --check
+./deploy.sh -g rg-monitoring -l westus2 -s '<subscription-uuid>' --check
 
 # Test an existing Logic App without redeploying or supplying the Teams URL.
-bash deploy.sh -g rg-monitoring -s '<subscription-uuid>' --test-only
+./deploy.sh -g rg-monitoring -s '<subscription-uuid>' --test-only
 
 # Change filtering and resource names.
-bash deploy.sh -g rg-monitoring -l westus2 -p ops-alerts \
+./deploy.sh -g rg-monitoring -l westus2 -p ops-alerts \
   --severities Sev0,Sev1 --no-resolved
 
 # Opt-in routing for an entire resource group (use carefully).
-bash deploy.sh -g rg-monitoring -l westus2 -s '<subscription-uuid>' \
+./deploy.sh -g rg-monitoring -l westus2 -s '<subscription-uuid>' \
   --apr-scope '/subscriptions/<subscription-uuid>/resourceGroups/rg-workloads'
 ```
 
@@ -114,22 +117,22 @@ reported error and rerun. The script never deletes cloud resources.
 ## Optional subscription-wide VM CPU rules
 
 After deploying the notification pipeline, use `deploy-alert-rules.sh` separately
-to create metric alert rules. It requires the same Bash, Python 3, and Azure CLI
-prerequisites, an existing resource group/action group, read access to all target
+to create metric alert rules. It requires the prerequisites above, an existing
+resource group/action group, read access to all target
 VMs/metrics, and permission to read/write `Microsoft.Insights/metricAlerts`.
 No Teams webhook URL is needed.
 
-```bash
+```shell
 # Preview only: Azure reads, no resource changes.
-bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+./deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
   --regions eastus2,southcentralus
 
 # Apply disabled rules for customer review.
-bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+./deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
   --regions eastus2,southcentralus --apply
 
 # Explicitly enable (or update and enable) after policy/destination approval.
-bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
+./deploy-alert-rules.sh -g rg-monitoring -s '<subscription-uuid>' \
   --regions eastus2,southcentralus --apply --enable
 ```
 
@@ -172,13 +175,13 @@ subscription before production use.
 Run the script once per subscription, listing the regions to cover in that
 subscription. Two subscriptions across two regions require four rules in total:
 
-```bash
+```shell
 # Preview two regional rules in subscription 1.
-bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-1-uuid>' \
+./deploy-alert-rules.sh -g rg-monitoring -s '<subscription-1-uuid>' \
   --regions eastus2,southcentralus
 
 # Preview two regional rules in subscription 2.
-bash deploy-alert-rules.sh -g rg-monitoring -s '<subscription-2-uuid>' \
+./deploy-alert-rules.sh -g rg-monitoring -s '<subscription-2-uuid>' \
   --regions eastus2,southcentralus
 ```
 
@@ -197,10 +200,10 @@ when the other is deployed.
 
 ## Verification and troubleshooting
 
-```bash
+```shell
 python -m unittest discover -s tests -p 'test_*.py'
-bash tests/test_cli.sh
-bash -n deploy-alert-rules.sh
+./tests/test_cli.sh
+./deploy-alert-rules.sh --help
 ```
 
 These are offline tests using mocked Azure CLI and curl. They do not verify
@@ -286,7 +289,7 @@ use that self-monitoring condition as a production failure alert.
 Keep this folder in its own Git repository, not part of a home-directory
 repository. Before committing or publishing changes, verify:
 
-```bash
+```shell
 git rev-parse --show-toplevel
 git status --short --untracked-files=all
 git diff --cached
