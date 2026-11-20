@@ -34,8 +34,8 @@ az() {
         *) shift ;;
       esac
     done
-    if [[ "$method" == post && "$url" == *'/listCallbackUrl?'* ]]; then
-      printf '"https://example.logic.azure.com/workflows/fake/triggers/manual/invoke?sig=TEST_ONLY"\n'
+    if [[ "$method" == post && "$url" == *'/triggers/When_an_HTTP_request_is_received/listCallbackUrl?'* ]]; then
+      printf '"https://example.logic.azure.com/workflows/fake/triggers/When_an_HTTP_request_is_received/invoke?sig=TEST_ONLY"\n'
     elif [[ "$method" == put && -n "$body" ]]; then
       "$MOCK_PYTHON" - "$body" "$url" "$MOCK_WORK" <<'PY'
 import json
@@ -113,7 +113,7 @@ run -g rg-test -l westus2 --test --no-resolved --severities Sev1,Sev2 \
 grep -q 'not proof of channel delivery' "$work/output.txt"
 [[ $(grep -c -- '--method put' "$MOCK_LOG") == 3 ]]
 grep -q 'actionRules/alerts-teams-apr' "$MOCK_LOG"
-grep -q 'listCallbackUrl' "$MOCK_LOG"
+grep -q '/triggers/When_an_HTTP_request_is_received/listCallbackUrl' "$MOCK_LOG"
 ! grep -q 'TEST_ONLY' "$MOCK_LOG"
 ! grep -q 'TEST_ONLY' "$work/output.txt"
 last_body=$("$MOCK_PYTHON" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).read_text())' "$work/last-body-path.txt")

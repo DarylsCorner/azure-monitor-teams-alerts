@@ -13,7 +13,7 @@ payloads = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(payloads)
 
 # Deliberately fake signed URLs for offline tests; not usable credentials.
-CALLBACK = "https://example.logic.azure.com/workflows/fake/triggers/manual/invoke?sig=TEST_ONLY"
+CALLBACK = "https://example.logic.azure.com/workflows/fake/triggers/When_an_HTTP_request_is_received/invoke?sig=TEST_ONLY"
 TEAMS = "https://example.environment.api.powerplatform.com/powerautomate/automations/direct/workflows/fake/triggers/manual/paths/invoke?sig=TEST_ONLY"
 
 
@@ -100,7 +100,7 @@ class PayloadTests(unittest.TestCase):
 
     def test_workflow_delivery_and_error_contract(self):
         workflow = payloads.read_json(ROOT / "workflow.json")
-        trigger = workflow["triggers"]["manual"]
+        trigger = workflow["triggers"]["When_an_HTTP_request_is_received"]
         self.assertEqual(trigger["inputs"]["method"], "POST")
         self.assertEqual(trigger.get("operationOptions"), "EnableSchemaValidation")
         self.assertEqual(trigger["runtimeConfiguration"]["secureData"]["properties"], ["outputs"])

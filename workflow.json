@@ -7,7 +7,7 @@
     "sendResolved": { "type": "Bool" }
   },
   "triggers": {
-    "manual": {
+    "When_an_HTTP_request_is_received": {
       "type": "Request",
       "kind": "Http",
       "operationOptions": "EnableSchemaValidation",

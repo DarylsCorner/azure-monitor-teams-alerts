@@ -114,6 +114,14 @@ Disable or remove it explicitly in Azure if no longer wanted. Resources are
 provisioned sequentially: a failed run may leave partial resources; fix the
 reported error and rerun. The script never deletes cloud resources.
 
+The HTTP trigger is named `When_an_HTTP_request_is_received` so its purpose is
+clear in the designer. To upgrade a deployment with the former `manual` trigger,
+rerun normal deployment with the same subscription, resource group, prefix, and
+intended settings. Supply the Teams webhook URL again; deployment updates the
+trigger and refreshes the action group's callback URL. `--test-only` does not
+migrate the old trigger and requires this upgrade first. Update any other callers
+that stored the old callback URL. HTTP validation and delivery behavior are unchanged.
+
 ## Optional subscription-wide VM CPU rules
 
 After deploying the notification pipeline, use `deploy-alert-rules.sh` separately

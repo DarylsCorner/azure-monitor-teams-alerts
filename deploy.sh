@@ -137,7 +137,7 @@ if [[ "$test_only" != true ]]; then
 fi
 
 # These are credentials: keep them in private temporary files, never command arguments.
-rest --method post --url "$management$workflow_id/triggers/manual/listCallbackUrl?api-version=2016-06-01" \
+rest --method post --url "$management$workflow_id/triggers/When_an_HTTP_request_is_received/listCallbackUrl?api-version=2016-06-01" \
   --query value -o json >"$temp_dir/callback.json"
 if [[ "$test_only" != true ]]; then
   payload action-group "$temp_dir/action-group.json" "$temp_dir/callback.json" "$workflow_id" "$prefix"
